@@ -236,8 +236,9 @@ function ncread(
     # first timestep), that is later updated with the `update_cyclic!` function.
     if isnothing(dimname)
         dim_sel = (x = :, y = :, time=1)
-    else
-        @assert dimname == :layer
+    elseif dimname == :classes
+        dim_sel = (x = :, y = :, classes = :, time=1)
+    elseif dimname == :layer
         dim_sel = (x = :, y = :, layer = :, time=1)
     end
 
