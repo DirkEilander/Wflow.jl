@@ -924,13 +924,18 @@ end
 
 "Write a new timestep with scalar data to a NetCDF file"
 function write_netcdf_timestep(model, dataset)
-    @unpack writer, clock = model
+    @unpack writer, clock, config = model
 
     time_index = add_time(dataset, clock.time)
-    for (nt, nc) in zip(writer.nc_scalar, writer.ncvars_dims)
+    for (nt, nc, var) in zip(writer.nc_scalar, writer.ncvars_dims, config.netcdf.variable)
         A = param(model, nt.parameter)
         # could be a value, or a vector in case of map
-        v = nt.reducer(A)
+        if haskey(var, "index_dim")
+            i = var["index_dim"]
+            v = nt.reducer(getindex.(A,i))
+        else
+            v = nt.reducer(A)
+        end
         dataset[nc.var][:, time_index] .= v
     end
     return model
@@ -1148,14 +1153,19 @@ function reducer(col, rev_inds, x_nc, y_nc, config, dataset, fileformat)
 end
 
 function write_csv_row(model)
-    @unpack writer, clock = model
+    @unpack writer, clock, config = model
     isnothing(writer.csv_path) && return nothing
     io = writer.csv_io
     print(io, string(clock.time))
-    for nt in writer.csv_cols
+    for (nt, col) in zip(writer.csv_cols, config.csv.column)
         A = param(model, nt.parameter)
         # could be a value, or a vector in case of map
-        v = nt.reducer(A)
+        if haskey(col, "index_dim")
+            i = col["index_dim"]
+            v = nt.reducer(getindex.(A,i))
+        else
+            v = nt.reducer(A)
+        end
         # numbers are also iterable
         for el in v
             print(io, ',', el)
