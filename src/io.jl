@@ -389,7 +389,7 @@ function setup_grid_netcdf(
     parameters,
     calendar,
     time_units,
-    maxlayers,
+    extra_dim,
     sizeinmetres;
     float_type = Float32,
 )
@@ -452,8 +452,8 @@ function setup_grid_netcdf(
             ],
         )
     end
-    if isnothing(maxlayers) == false
-        defVar(ds, "layer", collect(1:maxlayers), ("layer",))
+    if isnothing(extra_dim) == false
+        defVar(ds, extra_dim.name, extra_dim.value, (extra_dim.name,))
     end
     defVar(
         ds,
@@ -474,12 +474,12 @@ function setup_grid_netcdf(
                     attrib = ["_FillValue" => float_type(NaN)],
                 )
             elseif eltype(val.vector) <: SVector
-                # SVectors are used to store layers
+                # SVectors are used for additional dimension (`extra_dim`) 
                 defVar(
                     ds,
                     key,
                     float_type,
-                    ("x", "y", "layer", "time"),
+                    ("x", "y", extra_dim.name, "time"),
                     attrib = ["_FillValue" => float_type(NaN)],
                 )
             else
@@ -498,12 +498,12 @@ function setup_grid_netcdf(
                     attrib = ["_FillValue" => float_type(NaN)],
                 )
             elseif eltype(val.vector) <: SVector
-                # SVectors are used to store layers
+                # SVectors are used for additional dimension (`extra_dim`)
                 defVar(
                     ds,
                     key,
                     float_type,
-                    ("lon", "lat", "layer", "time"),
+                    ("lon", "lat", extra_dim.name, "time"),
                     attrib = ["_FillValue" => float_type(NaN)],
                 )
             else
@@ -795,7 +795,7 @@ function prepare_writer(
     x_nc,
     y_nc,
     nc_static;
-    maxlayers = nothing,
+    extra_dim = nothing,
 )
     sizeinmetres = get(config.model, "sizeinmetres", false)::Bool
 
@@ -818,7 +818,7 @@ function prepare_writer(
             output_map,
             calendar,
             time_units,
-            maxlayers,
+            extra_dim,
             sizeinmetres,
         )
     else
@@ -841,7 +841,7 @@ function prepare_writer(
             state_map,
             calendar,
             time_units,
-            maxlayers,
+            extra_dim,
             sizeinmetres;
             float_type = Float,
         )
@@ -1255,8 +1255,9 @@ nc_dim_name(ds::CFDataset, name::Symbol) = nc_dim_name(Symbol.(keys(ds.dim)), na
 """
     nc_dim(ds::CFDataset, name::Symbol)
 
-Return the dimension coordinate, based on the internal name (:x, :y, :layer, :time),
-which will map to the correct NetCDF name using `nc_dim_name`.
+Return the dimension coordinate, based on the internal name (:x, :y, :`extra_dim.name`,
+:time), `extra_dim` depends on the model type, which will map to the correct NetCDF name
+using `nc_dim_name`.
 """
 nc_dim(ds::CFDataset, name) = ds[nc_dim_name(ds, name)]
 
@@ -1271,7 +1272,7 @@ function internal_dim_name(name::Symbol)
         return :x
     elseif name in (:y, :lat, :latitude)
         return :y
-    elseif name in (:time, :layer) #, :classes
+    elseif name in (:time, :layer, :classes)
         return name
     else
         error("Unknown dimension $name")
@@ -1285,7 +1286,7 @@ Return the data of a NetCDF data variable as an Array. Only dimensions in `dim_s
 NamedTuple like (x=:, y=:, time=1). Other dimensions that may be present need to be size 1,
 otherwise an error is thrown.
 
-`dim_sel` keys should be the internal dimension names; :x, :y, :time, :layer.
+`dim_sel` keys should be the internal dimension names; :x, :y, :time, :`extra_dim.name`.
 """
 function read_dims(A::NCDatasets.CFVariable, dim_sel::NamedTuple)
     dimsizes = dimsize(A)
@@ -1344,13 +1345,19 @@ end
 """
     permute_data(data, dim_names)
 
-Given an Array of data, and a list of its dimension names, return a permuted version
-of the data such that the dimension order will follow (:x, :y, :layer). No permutation
+Given an Array of data, and a list of its dimension names, return a permuted version of the
+data such that the dimension order will follow (:x, :y, :`extra_dim.name`). No permutation
 is done if this is not needed.
 """
 function permute_data(data, dim_names)
     @assert ndims(data) == length(dim_names)
-    desired_order = (:x, :y, :layer)
+    if :layer in dim_names
+        desired_order = (:x, :y, :layer)
+    elseif :classes in dim_names
+        desired_order = (:x, :y, :classes)
+    else
+        desired_order = (:x, :y)
+    end
     @assert dim_names ⊆ desired_order
     if length(dim_names) == 2
         if first(dim_names) == :x
@@ -1380,9 +1387,15 @@ function reverse_data!(data, dims_increasing)
     # desired internal ordering, just like the data is after permutation
     if length(dims_increasing) == 2
         dims_increasing_ordered = (x = dims_increasing.x, y = dims_increasing.y)
-    elseif length(dims_increasing) == 3
+    elseif length(dims_increasing) == 3 && haskey(dims_increasing, :layer)
         dims_increasing_ordered =
             (x = dims_increasing.x, y = dims_increasing.y, layer = dims_increasing.layer)
+    elseif length(dims_increasing) == 3 && haskey(dims_increasing, :classes)
+        dims_increasing_ordered = (
+            x = dims_increasing.x,
+            y = dims_increasing.y,
+            classes = dims_increasing.classes,
+        )
     else
         error("Unsupported number of dimensions")
     end

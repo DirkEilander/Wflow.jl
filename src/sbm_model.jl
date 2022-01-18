@@ -280,7 +280,7 @@ function initialize_sbm_model(config::Config)
         x_nc,
         y_nc,
         nc,
-        maxlayers = sbm.maxlayers,
+        extra_dim = (name = "layer", value = collect(1:sbm.maxlayers)),
     )
     close(nc)
 
@@ -346,7 +346,7 @@ function initialize_sbm_model(config::Config)
         instate_path = input_path(config, config.state.path_input)
         @info "Set initial conditions from state file `$instate_path`."
         state_ncnames = ncnames(config.state)
-        set_states(instate_path, model, state_ncnames; type = Float)
+        set_states(instate_path, model, state_ncnames; type = Float, dimname = :layer)
         @unpack lateral, vertical = model
         # update zi for vertical sbm and kinematic wave volume for river and land domain
         zi =
