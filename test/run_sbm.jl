@@ -18,6 +18,7 @@ flush(model.writer.csv_io)  # ensure the buffer is written fully to disk
     @test row.Q ≈ 9.88374809067884f0
     @test row.volume ≈ 3.298264381636329f7
     @test row.temp_bycoord ≈ 2.390000104904175f0
+    @test row.vwc_layer2_bycoord ≈ 0.25901943991019094f0
     @test row.temp_byindex ≈ 2.390000104904175f0
     @test row.Q_6336050 ≈ 0.0066621442402248245f0
     @test row.Q_6336510 ≈ 0.04727879981652821f0
